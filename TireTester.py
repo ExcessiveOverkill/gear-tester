@@ -13,7 +13,7 @@ mbTorque=0
 error=[]
 
 settings={}
-with open('settings1.csv', mode='r') as csvfile:
+with open('tireTesterSettings.csv', mode='r') as csvfile:
     reader = csv.reader(csvfile, delimiter=':', dialect="unix")
     settings = {rows[0]:rows[1] for rows in reader}
 
@@ -28,34 +28,35 @@ try:
 except:
     programStatus="disconnected"
 root = Tk()
-root.title("Gear Tester")
+root.title("Tire Tester")
 #root.iconbitmap('logo.ico')
-servoFrame = Frame(root, height=456, width=210, highlightbackground="black", highlightthickness=1)
+servoFrame = Frame(root, height=650, width=250, highlightbackground="black", highlightthickness=1)
 servoFrame.grid()
 servoFrame.grid_propagate(0)
 
 UIframe = Frame(root)
 UIframe.grid(column=1, row=0)
 
-controlFrame = Frame(UIframe, height=50, width=450, highlightbackground="black", highlightthickness=1)
+controlFrame = Frame(UIframe, height=50, width=600, highlightbackground="black", highlightthickness=1)
 controlFrame.grid(column=0, row=0)
 controlFrame.grid_propagate(0)
 
-calibrationFrame = Frame(UIframe, height=80, width=450, highlightbackground="black", highlightthickness=1)
+calibrationFrame = Frame(UIframe, height=80, width=600, highlightbackground="black", highlightthickness=1)
 calibrationFrame.grid(column=0, row=1)
 calibrationFrame.grid_propagate(0)
 
-breakFrame = Frame(UIframe, height=106, width=450, highlightbackground="black", highlightthickness=1)
-breakFrame.grid(column=0, row=2)
-breakFrame.grid_propagate(0)
+staticFrictionFrame = Frame(UIframe, height=90, width=600, highlightbackground="black", highlightthickness=1)
+staticFrictionFrame.grid(column=0, row=4)
+staticFrictionFrame.grid_propagate(0)
 
-wearFrame = Frame(UIframe, height=130, width=450, highlightbackground="black", highlightthickness=1)
+kineticFrictionFrame = Frame(UIframe, height=90, width=600, highlightbackground="black", highlightthickness=1)
+kineticFrictionFrame.grid(column=0, row=4)
+kineticFrictionFrame.grid_propagate(0)
+
+wearFrame = Frame(UIframe, height=130, width=600, highlightbackground="black", highlightthickness=1)
 wearFrame.grid(column=0, row=3)
 wearFrame.grid_propagate(0)
 
-frictionFrame = Frame(UIframe, height=90, width=450, highlightbackground="black", highlightthickness=1)
-frictionFrame.grid(column=0, row=4)
-frictionFrame.grid_propagate(0)
 
 #Status/Control Section
 statusText  = StringVar()
@@ -68,48 +69,29 @@ desc.grid(column=0, row=1, padx=3, pady=1)
 
 mode = IntVar()
 
-breakSpeedVar = StringVar()
-breakTorqueVar = StringVar()
-breakTorqueRampVar = StringVar()
-breakDistanceVar = StringVar()
+staticFrictionDoneDistVar = StringVar()
+staticFrictionTorqueRampRateVar = StringVar()
+staticFrictionMaxTorqueVar = StringVar()
+
+kineticFrictionMaxTorqueVar = StringVar()
+kineticFrictionVelRampRateVar = StringVar()
+kineticFrictionMaxVelVar = StringVar()
 
 wearSpeedVar = StringVar()
-wearTorqueVar = StringVar()
-wearTimeVar = StringVar()
-wearDistanceVar = StringVar()
-wearTestTorqueVar = StringVar()
-wearFrequencyVar = StringVar()
-
-frictionTestPeriodVar = StringVar()
-frictionDistanceVar = StringVar()
-frictionSpeedStartVar = StringVar()
-frictionSpeedStopVar = StringVar()
-frictionSpeedStepsVar = StringVar()
-frictionTorqueStartVar = StringVar()
-frictionTorqueStopVar = StringVar()
-frictionTorqueStepsVar = StringVar()
+wearMaxTorqueVar = StringVar()
 
 #User input variables
-breakSpeedVar.set(settings["breaking_torque_speed"])
-breakTorqueVar.set(settings["breaking_torque_max_torque"])
-breakTorqueRampVar.set(settings["breaking_torque_ramp"])
-breakDistanceVar.set(settings["breaking_torque_detection_distance"])
+
+staticFrictionDoneDistVar.set(settings["static_friction_done_dist"])
+staticFrictionTorqueRampRateVar.set(settings["static_friction_torque_ramp_rate"])
+staticFrictionMaxTorqueVar.set(settings["static_friction_max_torque"])
+
+kineticFrictionMaxTorqueVar.set(settings["kinetic_friction_max_torque"])
+kineticFrictionVelRampRateVar.set(settings["kinetic_friction_vel_ramp_rate"])
+kineticFrictionMaxVelVar.set(settings["kinetic_friction_max_vel"])
 
 wearSpeedVar.set(settings["wear_speed"])
-wearTorqueVar.set(settings["wear_torque"])
-wearTimeVar.set(settings["wear_max_time"])
-wearDistanceVar.set(settings["wear_fail_distance"])
-wearTestTorqueVar.set(settings["wear_test_torque"])
-wearFrequencyVar.set(settings["wear_test_frequency"])
-
-frictionTestPeriodVar.set(settings["friction_test_period"])
-frictionDistanceVar.set(settings["friction_fail_distance"])
-frictionSpeedStartVar.set(settings["friction_speed_start"])
-frictionSpeedStopVar.set(settings["friction_speed_stop"])
-frictionSpeedStepsVar.set(settings["friction_speed_steps"])
-frictionTorqueStartVar.set(settings["friction_torque_start"])
-frictionTorqueStopVar.set(settings["friction_torque_stop"])
-frictionTorqueStepsVar.set(settings["friction_torque_steps"])
+wearMaxTorqueVar.set(settings["wear_max_torque"])
 
 
 
@@ -119,12 +101,11 @@ def Start():    #start selected test
     if(mode.get()==0):
         requestedProgramStatus="calibration"
     if(mode.get()==1):
-        requestedProgramStatus="breakingTorque"
-        #requestedProgramStatus="randomWheel"
+        requestedProgramStatus="staticFriction"
     if(mode.get()==2):
-        requestedProgramStatus="wear"
+        requestedProgramStatus="kineticFriction"
     if(mode.get()==3):
-        requestedProgramStatus="friction"
+        requestedProgramStatus="wear"
     saveSettings()
     
 
@@ -174,57 +155,66 @@ bFrictionOffset = StringVar()
 bfOffset = Label(calibrationFrame, textvariable=bFrictionOffset)
 bfOffset.grid(column=3, row=2)
 
-#Breaking Torque Test Section
-breakRbtn = Radiobutton(breakFrame, text="Breaking Torque", variable=mode, value=1)
-breakRbtn.grid(columnspan=3, padx=2, pady=2, sticky="nw")
 
-breakIncludeFriction  = IntVar()
-breakCkbtn = Checkbutton(breakFrame, text="Include Friction", variable=breakIncludeFriction, onvalue=1, offvalue=0)
-breakCkbtn.grid(columnspan=3, column=0, row=4, sticky="nw")
-if(settings["breaking_torque_include_friction"]=="True"):
-    breakCkbtn.select()
+#Static Friction Test Section
+staticRbtn = Radiobutton(staticFrictionFrame, text="Static Friction", variable=mode, value=1)
+staticRbtn.grid(columnspan=3, padx=2, pady=2, sticky="nw")
 
-breakSpeedEnt = Entry(breakFrame, relief=SUNKEN, width=5, justify=CENTER, textvariable=breakSpeedVar)
-breakSpeedEnt.grid(column=1, row=1, padx=2, pady=2, sticky="e")
+staticTorqueEnt = Entry(staticFrictionFrame, relief=SUNKEN, width=5, justify=CENTER, textvariable=staticFrictionMaxTorqueVar)
+staticTorqueEnt.grid(column=1, row=2, padx=2, pady=2, sticky="e")
 
-breakSpeedlbl = Label(breakFrame, text="Speed (rpm)")
-breakSpeedlbl.grid(column=2, row=1, padx=2, sticky="w")
+staticTorquelbl = Label(staticFrictionFrame, text="Max Torque (Nm)")
+staticTorquelbl.grid(column=2, row=2, padx=2, sticky="w")
 
-breakTorqueEnt = Entry(breakFrame, relief=SUNKEN, width=5, justify=CENTER, textvariable=breakTorqueVar)
-breakTorqueEnt.grid(column=1, row=2, padx=2, pady=2, sticky="e")
+staticRampEnt = Entry(staticFrictionFrame, relief=SUNKEN, width=5, justify=CENTER, textvariable=staticFrictionTorqueRampRateVar)
+staticRampEnt.grid(column=4, row=1, padx=2, pady=2, sticky="e")
 
-breakTorquelbl = Label(breakFrame, text="Max Torque (Nm)")
-breakTorquelbl.grid(column=2, row=2, padx=2, sticky="w")
+staticRamplbl = Label(staticFrictionFrame, text="Ramp (Nm/s)")
+staticRamplbl.grid(column=5, row=1, padx=2, sticky="w")
 
-breakRampEnt = Entry(breakFrame, relief=SUNKEN, width=5, justify=CENTER, textvariable=breakTorqueRampVar)
-breakRampEnt.grid(column=4, row=1, padx=2, pady=2, sticky="e")
+staticDistanceEnt = Entry(staticFrictionFrame, relief=SUNKEN, width=5, justify=CENTER, textvariable=staticFrictionDoneDistVar)
+staticDistanceEnt.grid(column=4, row=2, padx=2, pady=2, sticky="e")
 
-breakRamplbl = Label(breakFrame, text="Ramp (Nm/min)")
-breakRamplbl.grid(column=5, row=1, padx=2, sticky="w")
+staticDistancelbl = Label(staticFrictionFrame, text="Slip Distance (turns)")
+staticDistancelbl.grid(column=5, row=2, padx=2, sticky="w")
 
-breakDistanceEnt = Entry(breakFrame, relief=SUNKEN, width=5, justify=CENTER, textvariable=breakDistanceVar)
-breakDistanceEnt.grid(column=4, row=2, padx=2, pady=2, sticky="e")
+staticSpaceA = Frame(staticFrictionFrame, width=25)
+staticSpaceA.grid_propagate(0)
+staticSpaceA.grid(rowspan=2, column=0, row=1)
 
-breakDistancelbl = Label(breakFrame, text="Fail Distance (turns)")
-breakDistancelbl.grid(column=5, row=2, padx=2, sticky="w")
+staticSpaceB = Frame(staticFrictionFrame, width=42)
+staticSpaceB.grid_propagate(0)
+staticSpaceB.grid(rowspan=2, column=3, row=1)
 
-breakSpaceA = Frame(breakFrame, width=25)
-breakSpaceA.grid_propagate(0)
-breakSpaceA.grid(rowspan=2, column=0, row=1)
 
-breakSpaceB = Frame(breakFrame, width=42)
-breakSpaceB.grid_propagate(0)
-breakSpaceB.grid(rowspan=2, column=3, row=1)
+#Kinetic Friction Test Section
+kineticRbtn = Radiobutton(kineticFrictionFrame, text="Kinetic Friction", variable=mode, value=1)
+kineticRbtn.grid(columnspan=3, padx=2, pady=2, sticky="nw")
+
+kineticTorqueEnt = Entry(kineticFrictionFrame, relief=SUNKEN, width=5, justify=CENTER, textvariable=kineticFrictionMaxTorqueVar)
+kineticTorqueEnt.grid(column=1, row=2, padx=2, pady=2, sticky="e")
+
+kineticTorquelbl = Label(kineticFrictionFrame, text="Max Torque (Nm)")
+kineticTorquelbl.grid(column=2, row=2, padx=2, sticky="w")
+
+kineticRampEnt = Entry(kineticFrictionFrame, relief=SUNKEN, width=5, justify=CENTER, textvariable=kineticFrictionVelRampRateVar)
+kineticRampEnt.grid(column=4, row=1, padx=2, pady=2, sticky="e")
+
+kineticRamplbl = Label(kineticFrictionFrame, text="Vel Ramp (rpm/s)")
+kineticRamplbl.grid(column=5, row=1, padx=2, sticky="w")
+
+kineticSpaceA = Frame(kineticFrictionFrame, width=25)
+kineticSpaceA.grid_propagate(0)
+kineticSpaceA.grid(rowspan=2, column=0, row=1)
+
+kineticSpaceB = Frame(kineticFrictionFrame, width=42)
+kineticSpaceB.grid_propagate(0)
+kineticSpaceB.grid(rowspan=2, column=3, row=1)
+
 
 #Wear Test Section
 wearRbtn = Radiobutton(wearFrame, text="Wear", variable=mode, value=2)
 wearRbtn.grid(columnspan=3, padx=2, pady=2, sticky="w")
-
-wearIncludeFriction  = IntVar()
-wearCkbtn = Checkbutton(wearFrame, text="Include Friction", variable=wearIncludeFriction, onvalue=1, offvalue=0)
-wearCkbtn.grid(columnspan=3, column=0, row=4, sticky="w")
-if(settings["wear_include_friction"]=="True"):
-    wearCkbtn.select()
 
 wearSpeedEnt = Entry(wearFrame, relief=SUNKEN, width=5, justify=CENTER, textvariable=wearSpeedVar)
 wearSpeedEnt.grid(column=1, row=1, padx=2, pady=2, sticky="e")
@@ -232,35 +222,11 @@ wearSpeedEnt.grid(column=1, row=1, padx=2, pady=2, sticky="e")
 wearSpeedlbl = Label(wearFrame, text="Speed (rpm)")
 wearSpeedlbl.grid(column=2, row=1, padx=2, sticky="w")
 
-wearTorqueEnt = Entry(wearFrame, relief=SUNKEN, width=5, justify=CENTER, textvariable=wearTorqueVar)
+wearTorqueEnt = Entry(wearFrame, relief=SUNKEN, width=5, justify=CENTER, textvariable=wearMaxTorqueVar)
 wearTorqueEnt.grid(column=1, row=2, padx=2, pady=2, sticky="e")
 
-wearTorquelbl = Label(wearFrame, text="Running Torque (Nm)")
+wearTorquelbl = Label(wearFrame, text="Max Torque (Nm)")
 wearTorquelbl.grid(column=2, row=2, padx=2, sticky="w")
-
-wearTimeEnt = Entry(wearFrame, relief=SUNKEN, width=5, justify=CENTER, textvariable=wearTimeVar)
-wearTimeEnt.grid(column=1, row=3, padx=2, pady=2, sticky="e")
-
-wearTimelbl = Label(wearFrame, text="Test Length (Hours)")
-wearTimelbl.grid(column=2, row=3, padx=2, sticky="w")
-
-wearDistanceEnt = Entry(wearFrame, relief=SUNKEN, width=5, justify=CENTER, textvariable=wearDistanceVar)
-wearDistanceEnt.grid(column=4, row=1, padx=2, pady=2, sticky="e")
-
-wearDistancelbl = Label(wearFrame, text="Fail Distance (turns)")
-wearDistancelbl.grid(column=5, row=1, padx=2, sticky="w")
-
-wearTestTorqueEnt = Entry(wearFrame, relief=SUNKEN, width=5, justify=CENTER, textvariable=wearTestTorqueVar)
-wearTestTorqueEnt.grid(column=4, row=2, padx=2, pady=2, sticky="e")
-
-wearTestTorquelbl = Label(wearFrame, text="Testing Torque (Nm)")
-wearTestTorquelbl.grid(column=5, row=2, padx=2, sticky="w")
-
-wearTestFrequencyEnt = Entry(wearFrame, relief=SUNKEN, width=5, justify=CENTER, textvariable=wearFrequencyVar)
-wearTestFrequencyEnt.grid(column=4, row=3, padx=2, pady=2, sticky="e")
-
-wearTestFrequencylbl = Label(wearFrame, text="Testing Frequency (Minutes)")
-wearTestFrequencylbl.grid(column=5, row=3, padx=2, sticky="w")
 
 wearSpaceA = Frame(wearFrame, width=25)
 wearSpaceA.grid_propagate(0)
@@ -269,64 +235,6 @@ wearSpaceA.grid(rowspan=3, column=0, row=1)
 wearSpaceB = Frame(wearFrame, width=20)
 wearSpaceB.grid_propagate(0)
 wearSpaceB.grid(rowspan=3, column=3, row=1)
-
-#Friction Test Section
-frictionRbtn = Radiobutton(frictionFrame, text="Friction", variable=mode, value=3)
-frictionRbtn.grid(columnspan=3, padx=2, pady=2, sticky="w")
-
-frictionPeriodEnt = Entry(frictionFrame, relief=SUNKEN, width=5, justify=CENTER, textvariable=frictionTestPeriodVar)
-frictionPeriodEnt.grid(column=1, row=1, padx=2, pady=2, sticky="e")
-
-frictionPeriodlbl = Label(frictionFrame, text="Period (seconds)")
-frictionPeriodlbl.grid(column=2, row=1, padx=2, sticky="w")
-
-frictionDistanceEnt = Entry(frictionFrame, relief=SUNKEN, width=5, justify=CENTER, textvariable=frictionDistanceVar)
-frictionDistanceEnt.grid(column=1, row=2, padx=2, pady=2, sticky="e")
-
-frictionDistancelbl = Label(frictionFrame, text="Fail Distance (turns)")
-frictionDistancelbl.grid(column=2, row=2, padx=2, sticky="w")
-
-frictionSpeedlbl = Label(frictionFrame, text="Speed (rpm)")
-frictionSpeedlbl.grid(column=4, row=1, padx=2, sticky="e")
-
-frictionTorquelbl = Label(frictionFrame, text="Torque (Nm)")
-frictionTorquelbl.grid(column=4, row=2, padx=2, sticky="e")
-
-frictionStartlbl = Label(frictionFrame, text="Start")
-frictionStartlbl.grid(column=5, row=0, padx=2, sticky="s")
-
-frictionStoplbl = Label(frictionFrame, text="Stop")
-frictionStoplbl.grid(column=6, row=0, padx=2, sticky="s")
-
-frictionStepslbl = Label(frictionFrame, text="Steps")
-frictionStepslbl.grid(column=7, row=0, padx=2, sticky="s")
-
-frictionStartSpeedEnt = Entry(frictionFrame, relief=SUNKEN, width=5, justify=CENTER, textvariable=frictionSpeedStartVar)
-frictionStartSpeedEnt.grid(column=5, row=1, padx=2, pady=2)
-
-frictionStartTorqueEnt = Entry(frictionFrame, relief=SUNKEN, width=5, justify=CENTER, textvariable=frictionTorqueStartVar)
-frictionStartTorqueEnt.grid(column=5, row=2, padx=2, pady=2)
-
-frictionStopSpeedEnt = Entry(frictionFrame, relief=SUNKEN, width=5, justify=CENTER, textvariable=frictionSpeedStopVar)
-frictionStopSpeedEnt.grid(column=6, row=1, padx=2, pady=2)
-
-frictionStopTorqueEnt = Entry(frictionFrame, relief=SUNKEN, width=5, justify=CENTER, textvariable=frictionTorqueStopVar)
-frictionStopTorqueEnt.grid(column=6, row=2, padx=2, pady=2)
-
-frictionStepsSpeedEnt = Entry(frictionFrame, relief=SUNKEN, width=5, justify=CENTER, textvariable=frictionSpeedStepsVar)
-frictionStepsSpeedEnt.grid(column=7, row=1, padx=2, pady=2)
-
-frictionStepsTorqueEnt = Entry(frictionFrame, relief=SUNKEN, width=5, justify=CENTER, textvariable=frictionTorqueStepsVar)
-frictionStepsTorqueEnt.grid(column=7, row=2, padx=2, pady=2)
-
-
-frictionSpaceA = Frame(frictionFrame, width=25)
-frictionSpaceA.grid_propagate(0)
-frictionSpaceA.grid(rowspan=2, column=0, row=1)
-
-frictionSpaceB = Frame(frictionFrame, width=25)
-frictionSpaceB.grid_propagate(0)
-frictionSpaceB.grid(rowspan=2, column=3, row=1)
 
 
 Aspeed = DoubleVar()
@@ -340,29 +248,29 @@ SpeedInfolbl.grid(columnspan=2, column=1, row=0, padx=2)
 TorqueInfolbl = Label(servoFrame, text="Torque (Nm)")
 TorqueInfolbl.grid(columnspan=2, column=5, row=0, padx=2)
 
-servoAspeedlbl = Label(servoFrame, text="A")
-servoAspeedlbl.grid(column=1, row=1, padx=5, sticky="e")
+# servoAspeedlbl = Label(servoFrame, text="A")
+# servoAspeedlbl.grid(column=1, row=1, padx=5, sticky="e")
 
-servoBspeedlbl = Label(servoFrame, text="B")
-servoBspeedlbl.grid(column=2, row=1, padx=5, sticky="w")
+# servoBspeedlbl = Label(servoFrame, text="B")
+# servoBspeedlbl.grid(column=2, row=1, padx=5, sticky="w")
 
-servoAtorquelbl = Label(servoFrame, text="A")
-servoAtorquelbl.grid(column=5, row=1, padx=5, sticky="e")
+# servoAtorquelbl = Label(servoFrame, text="A")
+# servoAtorquelbl.grid(column=5, row=1, padx=5, sticky="e")
 
-servoBtorquelbl = Label(servoFrame, text="B")
-servoBtorquelbl.grid(column=6, row=1, padx=5, sticky="w")
+# servoBtorquelbl = Label(servoFrame, text="B")
+# servoBtorquelbl.grid(column=6, row=1, padx=5, sticky="w")
 
-AspeedScl = Scale(servoFrame, variable=Aspeed, from_=maxSpeed, to=-maxSpeed, orient=VERTICAL, showvalue=0, sliderlength=4, length=400, width=15, takefocus=0, troughcolor="green", border=1, resolution=.1, tickinterval=int(settings["speed_scale_divs"]), state=DISABLED)
+AspeedScl = Scale(servoFrame, variable=Aspeed, from_=maxSpeed, to=-maxSpeed, orient=VERTICAL, showvalue=0, sliderlength=10, length=600, width=40, takefocus=0, troughcolor="green", border=4, resolution=.1, tickinterval=int(settings["speed_scale_divs"]), state=DISABLED)
 AspeedScl.grid(columnspan=2, column=0, row=2, sticky="e")
 
-BspeedScl = Scale(servoFrame, variable=Bspeed, from_=maxSpeed, to=-maxSpeed, orient=VERTICAL, showvalue=0, sliderlength=4, length=400, width=15, takefocus=0, troughcolor="green", border=1, resolution=.1, state=DISABLED)
-BspeedScl.grid(column=2, row=2, sticky="w")
+# BspeedScl = Scale(servoFrame, variable=Bspeed, from_=maxSpeed, to=-maxSpeed, orient=VERTICAL, showvalue=0, sliderlength=4, length=400, width=15, takefocus=0, troughcolor="green", border=1, resolution=.1, state=DISABLED)
+# BspeedScl.grid(column=2, row=2, sticky="w")
 
-AtorqueScl = Scale(servoFrame, variable=Atorque, from_=maxTorque, to=-maxTorque, orient=VERTICAL, showvalue=0, sliderlength=4, length=400, width=15, takefocus=0, troughcolor="red", border=1, resolution=.01, tickinterval=10, state=DISABLED)
+AtorqueScl = Scale(servoFrame, variable=Atorque, from_=maxTorque, to=-maxTorque, orient=VERTICAL, showvalue=0, sliderlength=10, length=600, width=40, takefocus=0, troughcolor="red", border=4, resolution=.01, tickinterval=10, state=DISABLED)
 AtorqueScl.grid(columnspan=2, column=4, row=2, sticky="e")
 
-BtorqueScl = Scale(servoFrame, variable=Btorque, from_=maxTorque, to=-maxTorque, orient=VERTICAL, showvalue=0, sliderlength=4, length=400, width=15, takefocus=0, troughcolor="red", border=1, resolution=.01, state=DISABLED)
-BtorqueScl.grid(column=6, row=2, sticky="w")
+# BtorqueScl = Scale(servoFrame, variable=Btorque, from_=maxTorque, to=-maxTorque, orient=VERTICAL, showvalue=0, sliderlength=4, length=400, width=15, takefocus=0, troughcolor="red", border=1, resolution=.01, state=DISABLED)
+# BtorqueScl.grid(column=6, row=2, sticky="w")
 
 servoSpaceA = Frame(servoFrame, width=20)
 servoSpaceA.grid_propagate(0)
@@ -784,17 +692,17 @@ def saveResults(results):   #save results to a .csv file
         statusText.set("error: results file already exists")
         error.append("CSV file already exits and cannot be overwritten")
 
-def breakMode():    #Run max torque breaking test 
+def staticMode():    #Run static friction test 
     global error
     global programStatus
     global requestedProgramStatus
-    if(requestedProgramStatus=="breakingTorque" and programStatus=="idle"):
+    if(requestedProgramStatus=="staticFriction" and programStatus=="idle"):
         requestedProgramStatus=""
-        programStatus="breakingTorque"
-        statusText.set("Preparing Break Test")
+        programStatus="staticFriction"
+        statusText.set("Preparing Static Friction Test")
         enableServos()
         try:
-            servos.axis0.controller.config.control_mode=2   #set both servos to velocity mode
+            servos.axis0.controller.config.control_mode=2   #set servo to velocity mode
             servos.axis1.controller.config.control_mode=2
             servos.axis0.controller.config.input_mode=2     #set to velocity ramp mode for smoother speed
             servos.axis1.controller.config.input_mode=2
@@ -1144,236 +1052,22 @@ def frictionMode():     #Run friction test at range of speeds and torques
         return
 
 def saveSettings():     #Save user settings to settings file
-    settings["breaking_torque_speed"] = breakSpeedVar.get()
-    settings["breaking_torque_max_torque"] = breakTorqueVar.get()
-    settings["breaking_torque_ramp"] = breakTorqueRampVar.get()
-    settings["breaking_torque_detection_distance"] = breakDistanceVar.get()
+    settings["static_friction_done_dist"] = staticFrictionDoneDistVar.get()
+    settings["static_friction_max_torque"] = staticFrictionMaxTorqueVar.get()
+    settings["static_friction_torque_ramp_rate"] = staticFrictionTorqueRampRateVar.get()
+
+    settings["kinetic_friction_max_torque"] = kineticFrictionMaxTorqueVar.get()
+    settings["kinetic_friction_vel_ramp_rate"] = kineticFrictionVelRampRateVar.get()
+    settings["kinetic_friction_max_vel_speed"] = kineticFrictionMaxVelVar.get()
 
     settings["wear_speed"] = wearSpeedVar.get()
-    settings["wear_torque"] = wearTorqueVar.get()
-    settings["wear_max_time"] = wearTimeVar.get()
-    settings["wear_fail_distance"] = wearDistanceVar.get()
-    settings["wear_test_torque"] = wearTestTorqueVar.get()
-    settings["wear_test_frequency"] = wearFrequencyVar.get()
+    settings["wear_max_torque"] = wearMaxTorqueVar.get()
 
-    settings["friction_test_period"] = frictionTestPeriodVar.get()
-    settings["friction_fail_distance"] = frictionDistanceVar.get()
-    settings["friction_speed_start"] = frictionSpeedStartVar.get()
-    settings["friction_speed_stop"] = frictionSpeedStopVar.get()
-    settings["friction_speed_steps"] = frictionSpeedStepsVar.get()
-    settings["friction_torque_start"] = frictionTorqueStartVar.get()
-    settings["friction_torque_stop"] = frictionTorqueStopVar.get()
-    settings["friction_torque_steps"] = frictionTorqueStepsVar.get()
-
-    with open('settings1.csv', 'w') as f:  
+    with open('tireTesterSettings.csv', 'w') as f:  
         writer = csv.writer(f, delimiter=':', dialect="unix")
         for k, v in settings.items():
             writer.writerow([k, v])
 
-def gameWheelTarget():  #calculate the target position for the "random" game wheel
-    #uses the desc text box as input
-    #if no mode is selected, it will find all slots(if multiple) that contain the input then choose one at random
-    minSlotOffset = -(.2/32)
-    maxSlotOffset = (.2/32)
-    targetPos = 0
-    luck = 0
-    input = desc.get()
-    if input == "":
-        print("No input command from user")
-        return 24/32
-    if input.count("luck ") > 0:
-        #input.replace("luck ", "")
-        input = input[5:]
-        luck = int(input)
-        print("input after luck: " + input)
-        chanceMap = [   #chance layout
-            [["$1", 1], ["$5", 0], ["$10", 0], ["$100", 0], ["$1000", 0]],     #luck level 0
-            [["$1", 1000], ["$5", 500], ["$10", 100], ["$100", 10], ["$1000", 1]],     #luck level 1
-            [["$1", 500], ["$5", 500], ["$10", 100], ["$100", 50], ["$1000", 10]],     #luck level 2
-            [["$1", 1], ["$5", 1], ["$10", 1], ["$100", 1], ["$1000", 1]],     #luck level 3
-            [["$1", 0], ["$5", 0], ["$10", 0], ["$100", 0], ["$1000", 1]],     #luck level 4
-        ]
-        choices = []
-        weights = []
-        for chances in chanceMap[luck]:
-            choices.append(chances[0])
-            weights.append(chances[1])
-        input = str(random.choices(choices, weights = weights, k = 1))[2:-2]
-        print("input after random choice: " + input)
-    targetMap = [   #wheel target map
-        ["$1"],   #slot 0
-        ["$5"],   #slot 1
-        ["$10"],   #slot 2
-        ["$5"],   #slot 3
-        ["$1"],   #slot 4
-        ["$5"],   #slot 5
-        ["$1"],   #slot 6
-        ["$100"],   #slot 7
-        ["$1"],   #slot 8
-        ["$5"],   #slot 9
-        ["$10"],   #slot 10
-        ["$100"],   #slot 11
-        ["$1"],   #slot 12
-        ["$5"],   #slot 13
-        ["$1"],   #slot 14
-        ["$5"],   #slot 15
-        ["$1"],   #slot 16
-        ["$10"],   #slot 17
-        ["$1", "C"],   #slot 18
-        ["$100"],   #slot 19
-        ["$1"],   #slot 20
-        ["$5"],   #slot 21 
-        ["$10"],   #slot 22
-        ["$1"],   #slot 23
-        ["$1000", "A"],   #slot 24
-        ["$1"],   #slot 25
-        ["$5"],   #slot 26
-        ["$1"],   #slot 27
-        ["$5"],   #slot 28
-        ["$10"],   #slot 29
-        ["$5", "B"],   #slot 30
-        ["$100"],   #slot 31
-    ]
-    slotSize = 1 / len(targetMap)
-    slotOptions = []
-    if input.count("nearmiss ") > 0:
-        input = input[9:]
-        print("input after nearmiss: " + input)
-        if random.randint(0, 1) == 1:
-            targetPos += slotSize
-        else:
-            targetPos -= slotSize
-
-    targetPos += (random.randint(0, 100) / 100) * (maxSlotOffset - minSlotOffset) + minSlotOffset   #apply a random position offset within the slot to appear more random
-
-    for slot in enumerate(targetMap):
-        if input in slot[1]:
-            slotOptions.append(slot[0])
-    print("slotOptions: " + str(slotOptions))
-    targetPos += random.choice(slotOptions) * slotSize   #calculate rotary position from selected slot
-    return targetPos
-
-def randomGameWheel():  #game wheel that you manually spin and "randomly" slows and stops
-    global error
-    global programStatus
-    global requestedProgramStatus
-    autoStart = False
-    minSpeedRpm = 10    #minimum speed the wheel must be spun up to
-    accReleasedThreshold = 0    #wheel acceleration to detect it is no long being spun by someone
-    targetTurnPos = 0   #angle(in turns) that the wheel should stop at
-    spinDownTime = .1   #how long in seconds/rpm it takes for the wheel to stop(ideal value)
-    stopped = True
-
-    if(requestedProgramStatus=="randomWheel" and programStatus=="idle"):
-        requestedProgramStatus=""
-        programStatus="randomWheel"
-        enableServos()
-        
-        
-        if(requestedProgramStatus=="stop"):
-            programStatus="idle"
-            statusText.set("error: task interrupted")
-            return
-        
-        
-        turnPos = servos.axis0.encoder.pos_cpr_counts/servos.axis0.encoder.config.cpr
-        absPos = servos.axis0.encoder.pos_estimate
-        turnOffset = (turnPos+1) - (absPos % 1.0)
-        turnOffset %= 1.0
-        #print("turn offset: " + str(turnOffset))
-        #print("absPos: " + str(absPos))
-        #print("turnPos " + str(turnPos))
-        while(requestedProgramStatus != "stop"):
-            if(stopped):
-                try:
-                    statusText.set("Spin wheel to start!")
-                    servos.axis1.requested_state = 1    #disable servo B
-                    servos.axis0.controller.config.vel_limit = maxSpeed    #limit servo driven velocity
-                    servos.axis0.controller.config.input_mode=1     #set to input passthrough(no smoothing)
-                except:
-                    requestedProgramStatus="stop"
-                    programStatus="idle"
-                    disableServos()
-                    error.append("Could not prepare motors for random wheel(Odrive fail)")
-                    return
-            backgroundUpdate()
-            wait(.2)
-            if not autoStart:
-                stopPos = servos.axis0.encoder.pos_estimate
-                servos.axis0.controller.input_pos = stopPos     #set to current position
-                servos.axis0.controller.config.control_mode = 3   #set servo to position mode
-                while(requestedProgramStatus != "stop" and stopped and abs(stopPos - servos.axis0.encoder.pos_estimate) < .005):    #hold wheel in place until touched to prevent drifting from set position
-                    backgroundUpdate()
-            else:
-                wait(2)
-                servos.axis0.controller.config.control_mode = 2
-                servos.axis0.controller.config.input_mode = 2
-                servos.axis0.controller.config.vel_ramp_rate = 5
-                servos.axis0.controller.input_vel = -minSpeedRpm / 60
-                wait(servos.axis0.controller.input_vel / servos.axis0.controller.config.vel_ramp_rate + .5)
-                turnPos = servos.axis0.encoder.pos_cpr_counts/servos.axis0.encoder.config.cpr
-                while turnPos < .9:
-                    turnPos = servos.axis0.encoder.pos_cpr_counts/servos.axis0.encoder.config.cpr
-                    backgroundUpdate()
-
-
-            servos.axis0.controller.config.control_mode = 1   #set servo to torque mode
-            servos.axis0.controller.config.input_mode = 1
-
-            #wait for wheel to be spun, resist speed in wrong direction
-            while(requestedProgramStatus != "stop" and stopped):
-                backgroundUpdate()
-                if(servos.axis0.encoder.vel_estimate*60>1):
-                    setTorque("A", servos.axis0.encoder.vel_estimate*60, 3)
-                else:
-                    setTorque("A", 0, 2)
-                if(servos.axis0.encoder.vel_estimate*60 <= -minSpeedRpm and AservoAcc(.1) >= accReleasedThreshold or autoStart):
-                    targetTurnPos = gameWheelTarget() #get new target position
-                    print(targetTurnPos)
-                    stopped = False
-
-            if(not stopped and requestedProgramStatus != "stop"):
-                statusText.set("Wheel spun, slowing down")
-                servos.axis0.controller.config.control_mode = 2
-                servos.axis0.controller.config.input_mode = 1
-                servos.axis0.controller.config.vel_ramp_rate = .1
-                servos.axis0.controller.input_vel = servos.axis0.encoder.vel_estimate
-                servos.axis0.controller.config.input_mode = 2
-                servos.axis0.controller.input_vel = 0
-
-                speed = servos.axis0.encoder.vel_estimate
-                turnPos = servos.axis0.encoder.pos_cpr_counts/servos.axis0.encoder.config.cpr
-                absPos = servos.axis0.encoder.pos_estimate
-                #turnOffset = turnPos - absPos % 1
-                idealEndPos = absPos - (speed * 60 * spinDownTime) * (.5 * speed)      #calculate ideal end position
-                idealEndTurnPos = ((idealEndPos % 1) + 1+turnOffset) % 1      #calculate ideal end angle(in turns)
-                idealVsTargetDiff = idealEndTurnPos - targetTurnPos     #find difference between ideal and target end position angle
-                #print("turn offset: " + str(turnOffset))
-                #print("idealEndTurnPos: " + str(idealEndTurnPos))
-                #print("absPos: " + str(absPos))
-                #print("turnPos " + str(turnPos))
-                if(idealVsTargetDiff > 0):      #shift ideal to match target
-                    targetEndPos = idealEndPos - idealVsTargetDiff
-                else:
-                    targetEndPos = idealEndPos + idealVsTargetDiff
-                targetEndPos = idealEndPos - idealVsTargetDiff
-                #print("targetEndPos: " + str(targetEndPos))
-                while(not stopped):
-                    speed = servos.axis0.encoder.vel_estimate
-                    absPos = servos.axis0.encoder.pos_estimate
-                    #turnPos = (servos.axis0.encoder.pos_cpr_counts / servos.axis0.encoder.config.cpr)
-                    if(speed == 0 or (targetEndPos - absPos) >= 0 or requestedProgramStatus == "stop"):
-                        stopped = True
-                    else:
-                        rampRate = abs((.5 * speed * speed) / (targetEndPos - absPos))
-                        #print("Distance to go: " + str(targetEndPos - absPos))
-                        servos.axis0.controller.config.vel_ramp_rate = rampRate
-                    backgroundUpdate()
-        if(requestedProgramStatus=="stop" or autoStart):
-            statusText.set("error: task interrupted")
-            requestedProgramStatus=""
-            programStatus="idle"
-            disableServos()
 
 if(programStatus=="disconnected"):  #show error if no odrive found
     statusText.set("Odrive not found, please restart")
@@ -1389,21 +1083,20 @@ while(requestedProgramStatus != "shutdown"):
     if True:
         if(programStatus != "disconnected"):
             calibrationMode()
-            breakMode()
-            wearMode()
-            frictionMode()
-            randomGameWheel()
+            #staticMode()
+            # kineticMode()
+            # wearMode()
         if programStatus == "idle":
             calibrateRbtn['state'] = NORMAL
-            breakRbtn['state'] = NORMAL
+            staticRbtn['state'] = NORMAL
+            kineticRbtn['state'] = NORMAL
             wearRbtn['state'] = NORMAL
-            frictionRbtn['state'] = NORMAL
 
         if programStatus != "idle":
             calibrateRbtn['state'] = DISABLED
-            breakRbtn['state'] = DISABLED
+            staticRbtn['state'] = DISABLED
+            kineticRbtn['state'] = NORMAL
             wearRbtn['state'] = DISABLED
-            frictionRbtn['state'] = DISABLED
         
         backgroundUpdate()
     #except:
