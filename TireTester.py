@@ -54,7 +54,6 @@ if indexCalibrated and frictionCalibrated:
 
 root = Tk()
 root.title("Tire Tester")
-#root.iconbitmap('logo.ico')
 servoFrame = Frame(root, height=650, width=250, highlightbackground="black", highlightthickness=1)
 servoFrame.grid()
 servoFrame.grid_propagate(0)
@@ -151,27 +150,8 @@ stopBtn  = Button(controlFrame, text="STOP", bg="red", pady=4, width=12, command
 stopBtn.grid(column=2, row=0, pady=2, padx=7, rowspan=2)
 
 #Calibration Section
-
 calibrateRbtn = Radiobutton(calibrationFrame, text="Calibration", variable=mode, value=0)
 calibrateRbtn.grid(padx=2, pady=2, sticky="nw")
-
-# albl = Label(calibrationFrame, text="Motor A")
-# albl.grid(column=1, row=1, padx=6)
-
-# encoderlbl = Label(calibrationFrame, text="Encoder Offset")
-# encoderlbl.grid(column=2, row=0, padx=8)
-
-# frictionlbl = Label(calibrationFrame, text="Friction Offset")
-# frictionlbl.grid(column=3, row=0, padx=8)
-
-# aEncoderOffset = StringVar()
-# aeOffset = Label(calibrationFrame, textvariable=aEncoderOffset)
-# aeOffset.grid(column=2, row=1)
-
-# aFrictionOffset = StringVar()
-# afOffset = Label(calibrationFrame, textvariable=aFrictionOffset)
-# afOffset.grid(column=3, row=1)
-
 
 #Static Friction Test Section
 staticRbtn = Radiobutton(staticFrictionFrame, text="Static Friction", variable=mode, value=1)
@@ -465,9 +445,6 @@ def disableServos():    #disable servo power
         error.append("Could not disable motors(Odirve fail), try reboot")
     servosEnabled = False
 
-
-# aEncoderOffset.set("? counts")
-# aFrictionOffset.set("? Nm")
 
 def calibrationMode():      #Run calibration procedure to find self friction offsets
     global error
@@ -789,7 +766,7 @@ def wearMode():     #Run longterm wear test
         results.append(["Running Speed", wearSpeedVar.get()])
         results.append([])
 
-        results.append(["Time Since Start (s)", "Speed (rpm), Torque (Nm)"])
+        results.append(["Time Since Start (s)", "Torque (Nm)", "Speed (rpm)"])
         
         testOver=False
         testStartTime = time.time()
