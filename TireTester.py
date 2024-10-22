@@ -2,11 +2,14 @@ import odrive
 import time
 import csv
 from tkinter import *
-import random
+import numpy as np
+from calib import generatePolynomial
 
 programStatus="uncalibrated"
 requestedProgramStatus="none"
-calibrated=False
+indexCalibrated=False
+frictionCalibrated=False
+coggingCalibrated=False
 servosEnabled=False
 maTorque=0
 mbTorque=0
@@ -18,15 +21,37 @@ with open('tireTesterSettings.csv', mode='r') as csvfile:
     settings = {rows[0]:rows[1] for rows in reader}
 
 NmperA=float(settings["torque_constant"])
-frictionData=[int(settings["calibration_steps"])]
 maxTorque=int(settings["max_torque"])
 maxSpeed=int(settings["max_speed"])
+
+pos_poly = None
+neg_poly = None
+
+MIN_FRICTION_SPEED = 10
+MAX_FRICTION_SPEED = 200
+
+try:
+    pos_poly = generatePolynomial("positive_calibration_raw_data.npy", MIN_FRICTION_SPEED, MAX_FRICTION_SPEED)
+    neg_poly = generatePolynomial("negative_calibration_raw_data.npy", -MAX_FRICTION_SPEED, -MIN_FRICTION_SPEED)
+    frictionCalibrated = True
+except FileNotFoundError as e:
+    print(f"Could not load friction calibration, it will need run again ({e})")
+
 try:
     servos = odrive.find_any(timeout=3)
     if servos.vbus_voltage < 5:
         programStatus="disconnected"
+
+    if servos.axis0.encoder.is_ready == True:
+        indexCalibrated = True
+
+    servos.clear_errors()
 except:
     programStatus="disconnected"
+
+if indexCalibrated and frictionCalibrated:
+    programStatus="idle"
+
 root = Tk()
 root.title("Tire Tester")
 #root.iconbitmap('logo.ico')
@@ -109,6 +134,7 @@ def Start():    #start selected test
     if(mode.get()==3):
         requestedProgramStatus="wear"
     saveSettings()
+    servos.clear_errors()
     
 
 startBtn  = Button(controlFrame, text="START", bg="green", pady=4, width=12, command=Start)
@@ -129,22 +155,22 @@ stopBtn.grid(column=2, row=0, pady=2, padx=7, rowspan=2)
 calibrateRbtn = Radiobutton(calibrationFrame, text="Calibration", variable=mode, value=0)
 calibrateRbtn.grid(padx=2, pady=2, sticky="nw")
 
-albl = Label(calibrationFrame, text="Motor A")
-albl.grid(column=1, row=1, padx=6)
+# albl = Label(calibrationFrame, text="Motor A")
+# albl.grid(column=1, row=1, padx=6)
 
-encoderlbl = Label(calibrationFrame, text="Encoder Offset")
-encoderlbl.grid(column=2, row=0, padx=8)
+# encoderlbl = Label(calibrationFrame, text="Encoder Offset")
+# encoderlbl.grid(column=2, row=0, padx=8)
 
-frictionlbl = Label(calibrationFrame, text="Friction Offset")
-frictionlbl.grid(column=3, row=0, padx=8)
+# frictionlbl = Label(calibrationFrame, text="Friction Offset")
+# frictionlbl.grid(column=3, row=0, padx=8)
 
-aEncoderOffset = StringVar()
-aeOffset = Label(calibrationFrame, textvariable=aEncoderOffset)
-aeOffset.grid(column=2, row=1)
+# aEncoderOffset = StringVar()
+# aeOffset = Label(calibrationFrame, textvariable=aEncoderOffset)
+# aeOffset.grid(column=2, row=1)
 
-aFrictionOffset = StringVar()
-afOffset = Label(calibrationFrame, textvariable=aFrictionOffset)
-afOffset.grid(column=3, row=1)
+# aFrictionOffset = StringVar()
+# afOffset = Label(calibrationFrame, textvariable=aFrictionOffset)
+# afOffset.grid(column=3, row=1)
 
 
 #Static Friction Test Section
@@ -211,7 +237,7 @@ kineticSpaceB.grid(rowspan=2, column=3, row=1)
 
 #Wear Test Section
 wearRbtn = Radiobutton(wearFrame, text="Wear", variable=mode, value=3)
-wearRbtn.grid(columnspan=3, padx=2, pady=2, sticky="w")
+wearRbtn.grid(columnspan=3, padx=2, pady=2, sticky="nw")
 
 wearSpeedEnt = Entry(wearFrame, relief=SUNKEN, width=5, justify=CENTER, textvariable=wearSpeedVar)
 wearSpeedEnt.grid(column=1, row=1, padx=2, pady=2, sticky="e")
@@ -227,11 +253,11 @@ wearTorquelbl.grid(column=5, row=1, padx=2, sticky="w")
 
 wearSpaceA = Frame(wearFrame, width=25)
 wearSpaceA.grid_propagate(0)
-wearSpaceA.grid(rowspan=3, column=0, row=1)
+wearSpaceA.grid(rowspan=2, column=0, row=1)
 
-wearSpaceB = Frame(wearFrame, width=20)
+wearSpaceB = Frame(wearFrame, width=75)
 wearSpaceB.grid_propagate(0)
-wearSpaceB.grid(rowspan=3, column=3, row=1)
+wearSpaceB.grid(rowspan=2, column=3, row=1)
 
 
 Aspeed = DoubleVar()
@@ -326,7 +352,7 @@ def setTorque(config, torque, direction):   #set torque to be output (internally
                     torque *= -1
                 direction = 0
             servos.axis0.controller.input_torque = (torque - frictionOffset("A", direction))
-            #print("set torque A to: " + str(servos.axis0.controller.input_torque))
+            print("set torque A to: " + str(servos.axis0.controller.input_torque))
     except:
         requestedProgramStatus="stop"
         error.append("Could not set motor torque(Odrive error)")
@@ -344,56 +370,45 @@ def measureTorque(config, direction):   #return filtered & compensated torque ou
         requestedProgramStatus="stop"
         error.append("Could not measure motor torque(Odrive error)")
         return 0
-    Ac = Ac*NmperA + frictionOffset("A", direction)
+    
+    At = Ac*NmperA
     AtorqueFilter.pop(0)
-    AtorqueFilter.append(Ac)
-    Ac = sum(AtorqueFilter)/len(AtorqueFilter)
-    #convert & offset torque
-    if(config=="A"):
-        Ac = sum(AtorqueFilter)/len(AtorqueFilter)
-        return Ac
+    AtorqueFilter.append(At)
+    At = sum(AtorqueFilter)/len(AtorqueFilter)
+
+    At += frictionOffset("A", direction)
+    #print(f"measured torque {Ac*NmperA}, offset: {frictionOffset('A', direction)}")
+    
+    return At
 
 def frictionOffset(config, direction=0):    #return friction offset of servo at current speed
     global error
     global requestedProgramStatus
-    if(calibrated == False or direction == 2):
+    global pos_poly
+    global neg_poly
+
+    if(frictionCalibrated == False or direction == 2):
         return 0
     if(config == "A"):
         speed=servos.axis0.encoder.vel_estimate*60
         motorNum=1
 
-    #handle overspeeds
-    if(speed > maxSpeed):
-        speed = maxSpeed - .001
-    if(speed < -maxSpeed):
-        speed = -maxSpeed + .001
-    
-
     try:
-        offsetNum = (int(speed / float(settings["max_speed"]) * float(frictionData[0]))) + frictionData[0]
-        #if (abs(speed)%frictionData[0]==0):
-        #    return frictionData[offsetNum][motorNum]
-        if (offsetNum<frictionData[0]):
-            return ((abs(speed)%frictionData[0])/frictionData[0]) * (frictionData[offsetNum][motorNum]-frictionData[offsetNum+1][motorNum]) + frictionData[offsetNum][motorNum]#abs(speed)
-        if (offsetNum>frictionData[0]):
-            return ((speed%frictionData[0])/frictionData[0]) * (frictionData[offsetNum][motorNum]+abs(frictionData[offsetNum-1][motorNum])) + frictionData[offsetNum][motorNum]
-        if (offsetNum==frictionData[0]):
-            if(direction==1):
-                return frictionData[frictionData[0]+2][motorNum]
-            if(direction==-1):
-                return -frictionData[frictionData[0]+1][motorNum]
-            if(direction==0):
-                if(speed<0):
-                    return frictionData[frictionData[0]+1][motorNum]
-                if(speed>0):
-                    return frictionData[frictionData[0]][motorNum]
-                if(speed==0):
-                    return 0
-        return frictionData[offsetNum][motorNum]
+        if direction==0:
+            if speed > 0:
+                return pos_poly(speed)
+            elif speed < 0:
+                return neg_poly(speed)
+            else:
+                return 0
+        elif direction==1:
+            return pos_poly(speed)
+        elif direction==-1:
+            return neg_poly(speed)
             
-    except:
+    except Exception as e:
         requestedProgramStatus="stop"
-        error.append("Could not calculate friction offset(math error)")
+        error.append(f"Could not calculate friction offset ({e})")
         return 0
 
 def setSpeed(config, speed):    #directly set servo speed
@@ -451,14 +466,19 @@ def disableServos():    #disable servo power
     servosEnabled = False
 
 
-aEncoderOffset.set("? counts")
-aFrictionOffset.set("? Nm")
+# aEncoderOffset.set("? counts")
+# aFrictionOffset.set("? Nm")
 
 def calibrationMode():      #Run calibration procedure to find self friction offsets
     global error
     global programStatus
     global requestedProgramStatus
-    global calibrated
+    global indexCalibrated
+    global frictionCalibrated
+    global coggingCalibrated
+    global pos_poly
+    global neg_poly
+
     if(requestedProgramStatus == "calibration" and (programStatus=="idle" or programStatus=="uncalibrated")):
         requestedProgramStatus = ""
         programStatus = "calibration"
@@ -486,7 +506,7 @@ def calibrationMode():      #Run calibration procedure to find self friction off
             x=0
             while((servos.axis0.encoder.is_ready == False) and requestedProgramStatus=="" and programStatus=="calibration"):
                 servos.axis0.requested_state=6
-                wait(4)
+                wait(8)
                 if(x>1):
                     servos.axis0.requested_state=7
                     wait(1)
@@ -504,41 +524,66 @@ def calibrationMode():      #Run calibration procedure to find self friction off
             error.append("Could not find motor index(Odrive fail)")
             return
         wait(1)
-        enableServos()
-        calibrated=False
-        frictionData.clear()
-        frictionData.append(int(settings["calibration_steps"]))
-        for i in range(frictionData[0]):
-            value=[(-maxSpeed/frictionData[0])*(frictionData[0]-i)]
-            frictionData.append(value)
-        for i in range(frictionData[0]):
-            value=[(maxSpeed/frictionData[0])*(i+1)]
-            frictionData.append(value)
+        disableServos()
+        indexCalibrated=True
+        statusText.set("Index Found")
+
+        
     if programStatus == "calibration" and requestedProgramStatus=="":
+        if frictionCalibrated:
+            programStatus = "idle"
+            statusText.set("Ready!")
+            return
+        
         statusText.set("Calibrating Friction Offsets")
+        enableServos()
+        frictionCalibrated=False
+
+        positiveFrictionData = np.zeros((1, 2), dtype=np.float64)
+        negativeFrictionData = np.zeros((1, 2), dtype=np.float64)
+
         servos.axis0.controller.config.control_mode=2   #set servo to velocity mode
-        servos.axis0.controller.config.input_mode=2     #set to velocity ramp mode for smoother speed
-        servos.axis0.controller.config.vel_ramp_rate=5
+        servos.axis0.controller.config.input_mode=2     #set to velocity ramp mode
+        servos.axis0.controller.config.vel_ramp_rate=float(settings["calibration_ramp_rate"])/60
         servos.axis0.controller.config.anticogging.anticogging_enabled=False
-        #servos.axis0.controller.config.vel_limit = maxSpeed
-        setSpeed("A", frictionData[1][0])
-        wait(int(settings["servo_warmup_time"]))    #motor warm up delay
-        for i in range(len(frictionData)-1):
-            setSpeed("A", frictionData[i+1][0])
-            wait(float(settings["calibration_settling_time"]))
-            maTorque = measureTorque("A", 0)*1
-            frictionData[i+1].append(maTorque)
+        setSpeed("A", float(settings["max_speed"]))
+        wait(1)
+        while(round(abs(servos.axis0.controller.vel_setpoint*60), 1) < float(settings["max_speed"])):  # run until max speed is reached
+            wait(1/float(settings["live_sample_rate_hz"]))
+            maTorque = measureTorque("A", 2)
+            positiveFrictionData = np.append(positiveFrictionData, [[servos.axis0.encoder.vel_estimate*60, maTorque]], axis=0)
             if (requestedProgramStatus=="stop"):
                 disableServos()
                 return
+            
+        servos.axis0.controller.config.vel_ramp_rate=float(settings["max_speed"])/60/2
         setSpeed("A", 0)
+        wait(2.5)
+        servos.axis0.controller.config.vel_ramp_rate=float(settings["calibration_ramp_rate"])/60
+        setSpeed("A", -float(settings["max_speed"]))
         wait(1)
+        while(round(abs(servos.axis0.controller.vel_setpoint*60), 1) < float(settings["max_speed"])):  # run until max speed is reached
+            wait(1/float(settings["live_sample_rate_hz"]))
+            maTorque = measureTorque("A", 2)
+            negativeFrictionData = np.append(negativeFrictionData, [[servos.axis0.encoder.vel_estimate*60, maTorque]], axis=0)
+            if (requestedProgramStatus=="stop"):
+                disableServos()
+                return
+
         disableServos()
-        aEncoderOffset.set(str(servos.axis0.encoder.config.index_offset) + " counts")
-        aFrictionOffset.set(str(round(frictionData[frictionData[0]+1][1], 2)) + " Nm")
-        calibrated=True
+
+        np.save("positive_calibration_raw_data.npy", positiveFrictionData)
+        np.save("negative_calibration_raw_data.npy", negativeFrictionData)
+
+        pos_poly = generatePolynomial("positive_calibration_raw_data.npy", MIN_FRICTION_SPEED, MAX_FRICTION_SPEED)
+        neg_poly = generatePolynomial("negative_calibration_raw_data.npy", -MAX_FRICTION_SPEED, -MIN_FRICTION_SPEED)
+
+        frictionCalibrated=True
         programStatus = "idle"
+        statusText.set("Ready!")
         return
+    
+    
     if programStatus=="calibration" and requestedProgramStatus!="":
         disableServos()
         programStatus = "uncalibrated"
@@ -671,7 +716,7 @@ def kineticMode():    #Run kinetic friction test
         results.append(["Time Since Start (s)", "Torque (Nm)", "Speed (rpm)"])
 
         try:
-            setSpeed("A", -float(kineticFrictionMaxVelVar.get()))
+            setSpeed("A", -float(kineticFrictionMaxVelVar.get()) - 10)
         except:
             requestedProgramStatus="stop"
             programStatus="idle"
@@ -700,7 +745,7 @@ def kineticMode():    #Run kinetic friction test
                 statusText.set("Exceeded Max Torque at " + str(round(torque, 2)) + "Nm")
                 results[0][1]="Exceeded Max Torque at " + str(round(torque, 2)) + "Nm"
                 testOver=True
-            if(testEndTime<time.time()):
+            if(testEndTime<time.time() or speed>=float(kineticFrictionMaxVelVar.get())):
                 statusText.set("Tire Passed Test up to " + str(round(speed, 2)) + "rpm")
                 results[0][1]="Tire Passed Test up to " + str(round(speed, 2)) + "rpm"
                 testOver=True
@@ -889,7 +934,7 @@ def saveSettings():     #Save user settings to settings file
 
     settings["kinetic_friction_max_torque"] = kineticFrictionMaxTorqueVar.get()
     settings["kinetic_friction_vel_ramp_rate"] = kineticFrictionVelRampRateVar.get()
-    settings["kinetic_friction_max_vel_speed"] = kineticFrictionMaxVelVar.get()
+    settings["kinetic_friction_max_vel"] = kineticFrictionMaxVelVar.get()
 
     settings["wear_speed"] = wearSpeedVar.get()
     settings["wear_max_torque"] = wearMaxTorqueVar.get()
@@ -902,8 +947,11 @@ def saveSettings():     #Save user settings to settings file
 
 if(programStatus=="disconnected"):  #show error if no odrive found
     statusText.set("Odrive not found, please restart")
-else:
+elif(programStatus=="uncalibrated"):
     statusText.set("Calibrate Before Use!")
+else:
+    statusText.set("Ready!")
+
 while(requestedProgramStatus != "shutdown"):
     if(error):  #print out errors if there are any
         print("__________New errors__________")
